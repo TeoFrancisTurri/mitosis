@@ -1,0 +1,8 @@
+PLAYERS = "players"
+FOODS = "foods"
+ID = "id"
+X = "x"
+Y = "y"
+RADIUS = "radius"
+COLOR = "color"
+USERNAME = "username"

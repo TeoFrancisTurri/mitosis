@@ -1,5 +1,6 @@
 TYPE = "type"
-
-SNAPSHOT = "snapshot"
-
 PLAYER_ID = "player_id"
+MESSAGE = "message"
+SNAPSHOT = "snapshot"
+USERNAME = "username"
+TICK = "tick"

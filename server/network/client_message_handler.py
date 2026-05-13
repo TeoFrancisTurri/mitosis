@@ -1,10 +1,10 @@
-from shared.message_types import (
-    JOIN,
+from shared.protocol.message_types import (
+    CONNECT,
     PLAYER_INPUT,
     DISCONNECT,
 )
 
-from shared.message_fields import (
+from shared.protocol.message_fields import (
     TYPE,
     USERNAME,
 )
@@ -19,7 +19,7 @@ class ClientMessageHandler:
         self.client_handler = client_handler
 
         self.handlers = {
-            JOIN: self.handle_join,
+            CONNECT: self.handle_join,
             PLAYER_INPUT: self.handle_player_input,
             DISCONNECT: self.handle_disconnect,
         }

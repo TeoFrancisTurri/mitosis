@@ -4,10 +4,11 @@ from server.network.client_message_handler import ClientMessageHandler
 
 
 class ClientHandler:
-    def __init__(self, client_socket, address, match_manager):
+    def __init__(self, client_socket, address, match_manager, server):
         self.client_socket = client_socket
         self.address = address
         self.match_manager = match_manager
+        self.server = server
 
         self.player = None
         self.match = None
@@ -73,8 +74,10 @@ class ClientHandler:
 
         print(f"Cliente desconectado: {self.address}")
 
-        if self.match is not None and self.player is not None:
-            self.match.remove_player(self.player)
+  
+        self.match_manager.remove_client(self)
+
+        self.server.remove_client(self)
 
         try:
             self.client_socket.close()

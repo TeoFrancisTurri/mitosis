@@ -6,8 +6,9 @@ import time
 from server.entities.player import Player
 from server.config.player_config import PLAYER_INITIAL_RADIUS
 
-from shared.message_types import MATCH_FOUND, GAME_STATE
-from shared.message_fields import TYPE, PLAYER_ID, SNAPSHOT, TICK
+from shared.config.colors import PLAYER_COLORS
+from shared.protocol.message_types import MATCH_FOUND, GAME_STATE
+from shared.protocol.message_fields import TYPE, PLAYER_ID, SNAPSHOT, TICK
 
 
 class Match:
@@ -50,7 +51,7 @@ class Match:
             client_handler.player = player
             client_handler.match = self
 
-        client_handler.send_message({
+        client_handler.send({
             TYPE: MATCH_FOUND,
             PLAYER_ID: player.player_id,
         })
@@ -66,14 +67,21 @@ class Match:
             client_handler.player = None
             client_handler.match = None
 
+    def get_player_color(self, player_id):
+        return PLAYER_COLORS[
+            (player_id - 1) % len(PLAYER_COLORS)
+        ]
+
     def add_player(self, username):
         x, y = self.get_random_spawn(PLAYER_INITIAL_RADIUS)
+        color = self.get_player_color(self.next_player_id)
 
         player = Player(
             self.next_player_id,
             username,
             x,
-            y
+            y,
+            color
         )
 
         self.players[player.player_id] = player
@@ -120,7 +128,7 @@ class Match:
         }
 
         for client_handler in client_handlers:
-            client_handler.send_message(message)
+            client_handler.send(message)
 
     def get_snapshot(self):
         return {

@@ -1,8 +1,9 @@
 import pygame
 
 from client.states.client_state import ClientState
-from client.states.playing_state import PlayingState
+from client.states.matchmaking_state import MatchmakingState
 
+from client.config.client_settings import DEFAULT_USERNAME, WINDOW_TITLE
 from client.ui.button import Button
 from client.ui.text_input import TextInput
 
@@ -40,9 +41,12 @@ class MainMenuState(ClientState):
         if self.play_button.is_clicked(event):
             username = self.username_input.text.strip()
 
-            if username != "":
-                self.game.username = username
-                self.game.change_state(PlayingState(self.game))
+            if username == "":
+                username = DEFAULT_USERNAME
+
+            self.game.username = username
+
+            self.game.change_state(MatchmakingState(self.game, username))
 
         if self.exit_button.is_clicked(event):
             self.game.running = False
@@ -54,7 +58,7 @@ class MainMenuState(ClientState):
         self.screen.fill((245, 245, 245))
 
         title_surface = self.title_font.render(
-            "Mini Agar.io",
+            WINDOW_TITLE,
             True,
             (30, 30, 30)
         )

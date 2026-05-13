@@ -1,12 +1,17 @@
-from shared.message_fields import (
+from shared.protocol.snapshot_fields import (
+    COLOR,
     ID,
     USERNAME,
     X,
     Y,
     RADIUS,
+)
+
+from shared.protocol.input_fields import (
     DIRECTION_X,
     DIRECTION_Y,
 )
+
 
 from server.config.player_config import (
     PLAYER_INITIAL_RADIUS,
@@ -16,14 +21,16 @@ from server.config.player_config import (
 )
 
 
+
 class Player:
-    def __init__(self, player_id, username, x, y):
+    def __init__(self, player_id, username, x, y, color):
         self.player_id = player_id
         self.username = username
+        self.color = color
 
         self.x = x
         self.y = y
-
+        self.color = color
         self.radius = PLAYER_INITIAL_RADIUS
 
         self.direction_x = 0
@@ -62,4 +69,5 @@ class Player:
             X: self.x,
             Y: self.y,
             RADIUS: self.radius,
+            COLOR: self.color,
         }
