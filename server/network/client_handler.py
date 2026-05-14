@@ -1,7 +1,7 @@
 import json
 
 from server.network.client_message_handler import ClientMessageHandler
-
+from shared.config.network_config import ENCODING, BUFFER_SIZE
 
 class ClientHandler:
     def __init__(self, client_socket, address, match_manager, server):
@@ -22,14 +22,14 @@ class ClientHandler:
 
         try:
             while self.connected:
-                data = self.client_socket.recv(1024)
+                data = self.client_socket.recv(BUFFER_SIZE)
 
                 if not data:
                     print(f"Cliente cerró conexión: {self.address}")
                     break
 
                 try:
-                    message = json.loads(data.decode())
+                    message = json.loads(data.decode(ENCODING))
 
                 except json.JSONDecodeError:
                     print(f"JSON inválido recibido de {self.address}")
@@ -58,8 +58,8 @@ class ClientHandler:
             return
 
         try:
-            data = json.dumps(message).encode()
-
+            data = (json.dumps(message) + "\n").encode(ENCODING)
+            print(data)
             self.client_socket.sendall(data)
 
         except OSError as error:
@@ -76,7 +76,6 @@ class ClientHandler:
 
   
         self.match_manager.remove_client(self)
-
         self.server.remove_client(self)
 
         try:

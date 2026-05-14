@@ -81,10 +81,7 @@ class Client:
             return
 
         try:
-            data = json.dumps(message).encode(
-                ENCODING
-            )
-
+            data = (json.dumps(message) + "\n").encode(ENCODING)
             self.socket.sendall(data)
 
         except OSError as error:

@@ -2,7 +2,7 @@ import json
 import threading
 
 from client.network.client_message_handler import ClientMessageHandler
-
+from shared.config.network_config import BUFFER_SIZE, ENCODING
 
 class ClientReceiver(threading.Thread):
     def __init__(self, client_socket, snapshot_manager, event_queue):
@@ -18,21 +18,26 @@ class ClientReceiver(threading.Thread):
         self.running = True
 
     def run(self):
+        buffer = ""
         while self.running:
             try:
-                data = self.client_socket.recv(4096)
+                data = self.client_socket.recv(BUFFER_SIZE)
 
                 if not data:
                     print("Servidor desconectado")
                     break
 
-                message = json.loads(
-                    data.decode("utf-8")
-                )
+                buffer += data.decode(ENCODING)
 
-                self.message_handler.handle(
-                    message
-                )
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
+
+                    if not line:
+                        continue
+
+                    message = json.loads(line)
+
+                    self.message_handler.handle(message)
 
             except json.JSONDecodeError:
                 print("Mensaje inválido recibido")

@@ -1,15 +1,25 @@
-# shared/colors.py
-
 RED = (255, 80, 80)
 BLUE = (80, 160, 255)
 GREEN = (80, 220, 120)
 YELLOW = (255, 200, 80)
 PURPLE = (180, 80, 255)
+ORANGE = (255, 140, 60)
+PINK = (255, 120, 180)
+CYAN = (80, 220, 255)
+LIME = (170, 255, 80)
+MAGENTA = (255, 80, 220)
 
-PLAYER_COLORS = [
+GRID_COLOR = (210, 210, 210)
+
+ENTITIES_COLORS = [
     RED,
     BLUE,
     GREEN,
     YELLOW,
     PURPLE,
+    ORANGE,
+    PINK,
+    CYAN,
+    LIME,
+    MAGENTA,
 ]

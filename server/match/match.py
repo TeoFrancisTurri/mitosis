@@ -4,10 +4,14 @@ import threading
 import time
 
 from server.entities.player import Player
-from server.config.player_config import PLAYER_INITIAL_MASS, PLAYER_INITIAL_RADIUS
-from shared.config.world_config import MAP_HEIGHT, MAP_WIDTH
+from server.config.player_config import PLAYER_INITIAL_RADIUS
+from server.config.match_config import MATCH_TICK_RATE
+from server.config.food_config import FOOD_TYPES, FOOD_INITIAL_AMOUNT, RADIUS, MASS
+from server.entities.food import Food
+from server.managers.collision_manager import CollisionManager
 
-from shared.config.colors import PLAYER_COLORS
+from shared.config.world_config import MAP_HEIGHT, MAP_WIDTH
+from shared.config.colors import ENTITIES_COLORS
 from shared.protocol.message_types import MATCH_FOUND, GAME_STATE
 from shared.protocol.message_fields import TYPE, PLAYER_ID, SNAPSHOT, TICK
 
@@ -18,13 +22,17 @@ class Match:
 
         self.client_handlers = []
         self.players = {}
+        self.foods = {}
 
-        self.map_width = 2000
-        self.map_height = 2000
+        self.map_width = MAP_WIDTH
+        self.map_height = MAP_HEIGHT
 
         self.next_player_id = 1
+        self.next_food_id = 1
         self.tick = 0
+        self.collision_manager = CollisionManager(self)
 
+        self.generate_initial_foods()
         self.running = False
         self.thread = None
         self.lock = threading.Lock()
@@ -39,9 +47,10 @@ class Match:
             self.tick += 1
 
             self.update()
+            self.collision_manager.update()
             self.send_snapshot()
 
-            time.sleep(1 / 30)
+            time.sleep(1 / MATCH_TICK_RATE)
 
     def add_client(self, client_handler, username):
         with self.lock:
@@ -68,16 +77,11 @@ class Match:
             client_handler.player = None
             client_handler.match = None
 
-    def get_player_color(self, player_id):
-        return PLAYER_COLORS[
-            (player_id - 1) % len(PLAYER_COLORS)
-        ]
-
 
     def add_player(self, username):
         
         x, y = self.get_random_spawn(PLAYER_INITIAL_RADIUS)
-        color = self.get_player_color(self.next_player_id)
+        color = random.choice(ENTITIES_COLORS)
 
         player = Player(
             self.next_player_id,
@@ -122,7 +126,7 @@ class Match:
 
     def send_snapshot(self):
         with self.lock:
-            snapshot = self.get_snapshot()
+            snapshot = self.generate_snapshot()
             client_handlers = list(self.client_handlers)
 
         message = {
@@ -130,7 +134,7 @@ class Match:
             TICK: self.tick,
             SNAPSHOT: snapshot,
         }
-
+        print(message)
         for client_handler in client_handlers:
             client_handler.send(message)
 
@@ -144,13 +148,42 @@ class Match:
             player.radius,
             min(MAP_HEIGHT - player.radius, player.y)
         )
-    def get_snapshot(self):
+    def generate_snapshot(self):
         return {
             "players": [
                 player.to_snapshot()
                 for player in self.players.values()
-            ]
+            ],
+            "foods": [
+                food.to_snapshot()
+                for food in self.foods.values()
+            ],
         }
 
     def stop(self):
         self.running = False
+
+    
+    def generate_initial_foods(self):
+        for _ in range(FOOD_INITIAL_AMOUNT):
+            self.add_food()
+
+
+    def add_food(self):
+        x = random.randint(0, self.map_width)
+        y = random.randint(0, self.map_height)
+
+        food_type = random.choice(FOOD_TYPES)
+        color = random.choice(ENTITIES_COLORS)
+        food = Food(
+            food_id=self.next_food_id,
+            x=x,
+            y=y,
+            radius=food_type[RADIUS],
+            mass=food_type[MASS],
+            color=color
+        )
+
+        self.foods[food.food_id] = food
+
+        self.next_food_id += 1

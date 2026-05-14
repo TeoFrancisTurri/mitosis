@@ -5,6 +5,7 @@ from client.managers.snapshot_manager import SnapshotManager
 
 from shared.config.world_config import MAP_WIDTH, MAP_HEIGHT
 from shared.protocol.message_types import PLAYER_INPUT
+from client.config.map_config import GRID_COLOR, GRID_SIZE
 
 from shared.protocol.message_fields import TYPE
 
@@ -16,6 +17,8 @@ from shared.protocol.input_fields import (
 from shared.protocol.snapshot_fields import (
     COLOR,
     PLAYERS,
+    USERNAME,
+    FOODS,
     X,
     Y,
     RADIUS,
@@ -28,7 +31,9 @@ class PlayingState(ClientState):
     def __init__(self, game, player_id):
         super().__init__(game)
         self.player_id = player_id
-        self.hud_font = pygame.font.SysFont(None, 32)
+        self.mass_font = pygame.font.SysFont(None, 32)
+        self.leaderboard_font = pygame.font.SysFont(None, 26)
+        self.username_font = pygame.font.SysFont(None, 24)
 
     def update(self, dt):
         direction_x, direction_y = self.get_mouse_direction()
@@ -96,9 +101,13 @@ class PlayingState(ClientState):
                 (x, y),
                 radius - 3,
             )
+        
+        foods = snapshot.get(FOODS, [])
+        self.draw_foods(foods, self.game.camera.x, self.game.camera.y)
 
         if local_player is not None:
-            self.draw_mass(local_player)
+            self.draw_score(local_player)
+            self.draw_leaderboard(players, local_player)
 
     def get_mouse_direction(self):
         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -117,9 +126,27 @@ class PlayingState(ClientState):
 
         return direction
     
+    def draw_foods(self, foods, camera_x, camera_y):
+        for food in foods:
+            food_x = food[X]
+            food_y = food[Y]
+
+            food_radius = food[RADIUS]
+            food_color = food[COLOR]
+
+            x = int(food_x - camera_x)
+            y = int(food_y - camera_y)
+
+            pygame.draw.circle(
+                self.screen,
+                food_color,
+                (x, y),
+                food_radius
+            )
+
     def draw_grid(self):
-        grid_size = 50
-        grid_color = (210, 210, 210)
+        grid_size = GRID_SIZE
+        grid_color = GRID_COLOR
 
         camera_x = int(self.game.camera.x)
         camera_y = int(self.game.camera.y)
@@ -156,11 +183,11 @@ class PlayingState(ClientState):
                 (visible_end_x - camera_x, screen_y),
             )
 
-    def draw_mass(self, player):
+    def draw_score(self, player):
         mass = int(player.get(MASS, 0))
 
-        text = self.hud_font.render(
-            f"Mass: {mass}",
+        text = self.mass_font.render(
+            f"Score: {mass}",
             True,
             (40, 40, 40)
         )
@@ -169,3 +196,61 @@ class PlayingState(ClientState):
         y = self.screen.get_height() - text.get_height() - 20
 
         self.screen.blit(text, (x, y))
+
+
+    def draw_leaderboard(self, players, local_player):
+        sorted_players = sorted(
+            players,
+            key=lambda player: player.get(MASS, 0),
+            reverse=True
+        )
+
+        x = self.screen.get_width() - 240
+        y = 20
+
+        width = 220
+        height = 180
+
+        background = pygame.Surface((width, height))
+        background.set_alpha(160)
+
+        background.fill((45, 45, 45))
+
+        self.screen.blit(background, (x, y))
+
+        title = self.leaderboard_font.render(
+            "Leaderboard",
+            True,
+            (255, 255, 255)
+        )
+
+        self.screen.blit(title, (x + 15, y + 10))
+
+        line_height = 26
+
+        for index, player in enumerate(sorted_players[:5]):
+            username = player.get(USERNAME, "Player")
+
+            is_local_player = (
+                player[ID] == local_player[ID]
+            )
+
+            color = (
+                (255, 120, 120)
+                if is_local_player
+                else (255, 255, 255)
+            )
+
+            text = self.leaderboard_font.render(
+                f"{index + 1}. {username}",
+                True,
+                color
+            )
+
+            self.screen.blit(
+                text,
+                (
+                    x + 15,
+                    y + 45 + index * line_height
+                )
+            )

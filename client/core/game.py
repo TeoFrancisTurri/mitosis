@@ -3,7 +3,6 @@ from queue import Queue
 import pygame
 
 from client.config.client_settings import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WINDOW_TITLE
-from client.config.colors import GRID_COLOR
 from client.states.main_menu_state import MainMenuState
 from client.network.client import Client
 from client.camera.camera import Camera
