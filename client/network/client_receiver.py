@@ -3,6 +3,7 @@ import threading
 
 from client.network.client_message_handler import ClientMessageHandler
 from shared.config.network_config import BUFFER_SIZE, ENCODING
+from shared.protocol import DISCONNECT, TYPE
 
 class ClientReceiver(threading.Thread):
     def __init__(self, client_socket, snapshot_manager, event_queue):
@@ -25,6 +26,7 @@ class ClientReceiver(threading.Thread):
 
                 if not data:
                     print("Servidor desconectado")
+                    self.message_handler.handle({TYPE: DISCONNECT})
                     break
 
                 buffer += data.decode(ENCODING)
@@ -43,11 +45,14 @@ class ClientReceiver(threading.Thread):
                 print("Mensaje inválido recibido")
 
             except OSError:
-                print("Conexión cerrada")
+                if self.running:
+                    print("Conexión cerrada inesperadamente")
+                    self.message_handler.handle({TYPE: DISCONNECT})
                 break
 
             except Exception as error:
                 print(f"Error en ClientReceiver: {error}")
+                self.message_handler.handle({TYPE: DISCONNECT})
                 break
 
         self.stop()

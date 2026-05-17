@@ -1,27 +1,16 @@
-from shared.protocol.message_types import (
-    CONNECT,
-    PLAYER_INPUT,
-    DISCONNECT,
-)
-
-from shared.protocol.message_fields import (
-    TYPE,
-    USERNAME,
-)
-
-from server.config.player_config import (
-    PLAYER_DEFAULT_USERNAME
-)
+from shared.protocol import CONNECT, PLAYER_INPUT, DISCONNECT, RESPAWN, TYPE, USERNAME
+from server.config import PLAYER_DEFAULT_USERNAME
 
 
-class ClientMessageHandler:
+class ServerMessageHandler:
     def __init__(self, client_handler):
         self.client_handler = client_handler
 
         self.handlers = {
-            CONNECT: self.handle_join,
+            CONNECT: self.handle_connect,
             PLAYER_INPUT: self.handle_player_input,
             DISCONNECT: self.handle_disconnect,
+            RESPAWN: self.handle_respawn,
         }
 
     def handle(self, message):
@@ -32,7 +21,7 @@ class ClientMessageHandler:
         if handler is not None:
             handler(message)
 
-    def handle_join(self, message):
+    def handle_connect(self, message):
         username = message.get(USERNAME)
 
         if username is None or username.strip() == "":
@@ -53,3 +42,12 @@ class ClientMessageHandler:
 
     def handle_disconnect(self, message):
         self.client_handler.disconnect()
+
+    def handle_respawn(self, message):
+        player = self.client_handler.player
+        match = self.client_handler.match
+
+        if player is None or match is None:
+            return
+
+        match.respawn_player(player)

@@ -1,7 +1,7 @@
 RADIUS = "radius"
 MASS = "mass"
 
-FOOD_INITIAL_AMOUNT = 50
+FOOD_INITIAL_AMOUNT = 70
 
 FOOD_TYPES = [
     {

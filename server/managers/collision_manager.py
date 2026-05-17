@@ -1,8 +1,6 @@
 import math
 
-
-PLAYER_EAT_MASS_MULTIPLIER = 1.15
-
+from server.config import PLAYER_EAT_MASS_MULTIPLIER
 
 class CollisionManager:
     def __init__(self, match):
@@ -19,15 +17,16 @@ class CollisionManager:
         for player in self.match.players.values():
             for food in foods:
                 if self.is_center_inside_circle(food, player):
-                    player.eat(food)
+                    player.eat_food(food)
                     eaten_food_ids.append(food.food_id)
 
         for food_id in eaten_food_ids:
             self.match.foods.pop(food_id, None)
-            self.match.add_food()
+            self.match.food_manager.add_food()
 
     def check_player_player_collisions(self):
-        eaten_player_ids = []
+        dead_players = []
+
         players = list(self.match.players.values())
 
         for big_player in players:
@@ -35,15 +34,15 @@ class CollisionManager:
                 if big_player.player_id == small_player.player_id:
                     continue
 
-                if small_player.player_id in eaten_player_ids:
+                if small_player in dead_players:
                     continue
 
                 if self.can_player_eat_player(big_player, small_player):
-                    big_player.eat(small_player)
-                    eaten_player_ids.append(small_player.player_id)
+                    big_player.eat_player(small_player)
+                    dead_players.append(small_player)
 
-        for player_id in eaten_player_ids:
-            self.match.players.pop(player_id, None)
+        for player in dead_players:
+            self.match.player_dead(player)
 
     def can_player_eat_player(self, big_player, small_player):
         if big_player.mass < (small_player.mass * PLAYER_EAT_MASS_MULTIPLIER):

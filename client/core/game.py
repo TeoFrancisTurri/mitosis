@@ -2,11 +2,11 @@ from queue import Queue
 
 import pygame
 
-from client.config.client_settings import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WINDOW_TITLE
-from client.states.main_menu_state import MainMenuState
-from client.network.client import Client
-from client.camera.camera import Camera
-from client.managers.snapshot_manager import SnapshotManager
+from client.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WINDOW_TITLE
+from client.states import MainMenuState
+from client.network import Client
+from client.camera import Camera
+from client.managers import SnapshotManager
 
 class Game:
     def __init__(self):
@@ -45,20 +45,37 @@ class Game:
         while self.running:
             dt = self.clock.tick(FPS)
 
-            for event in pygame.event.get():
-                self.state_changed = False
+            self.handle_pygame_events()
+            self.handle_network_events()
 
-                if event.type == pygame.QUIT:
-                    self.running = False
-                else:
-                    self.state.handle_event(event)
-
-                if self.state_changed:
-                    break
-     
             self.state.update(dt)
             self.state.draw()
 
             pygame.display.flip()
 
         pygame.quit()
+
+
+    def handle_pygame_events(self):
+        for event in pygame.event.get():
+            self.state_changed = False
+
+            if event.type == pygame.QUIT:
+                self.running = False
+                return
+
+            self.state.handle_event(event)
+
+            if self.state_changed:
+                return
+            
+    def handle_network_events(self):
+        while not self.event_queue.empty():
+            self.state_changed = False
+
+            event = self.event_queue.get()
+
+            self.state.handle_event(event)
+
+            if self.state_changed:
+                return

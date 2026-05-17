@@ -1,24 +1,11 @@
 import json
 import socket
 
-from client.network.client_receiver import ClientReceiver
-from client.config.client_network_config import HOST
-
-from shared.config.network_config import (
-    PORT,
-    ENCODING,
-)
-
-from shared.protocol.message_types import (
-    CONNECT,
-    DISCONNECT,
-)
-
-from shared.protocol.message_fields import (
-    TYPE,
-    USERNAME,
-)
-
+from client.network import ClientReceiver
+from shared.config import PORT, ENCODING
+from client.config import HOST
+from client.network.server_messages import disconnect
+ 
 
 class Client:
     def __init__(self, snapshot_manager, event_queue):
@@ -34,10 +21,7 @@ class Client:
             return True
 
         try:
-            self.socket = socket.socket(
-                socket.AF_INET,
-                socket.SOCK_STREAM,
-            )
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
             self.socket.connect((HOST, PORT))
 
@@ -65,17 +49,6 @@ class Client:
 
         return False
 
-    def send_connect(self, username):
-        self.send({
-            TYPE: CONNECT,
-            USERNAME: username,
-        })
-
-    def send_disconnect(self):
-        self.send({
-            TYPE: DISCONNECT,
-        })
-
     def send(self, message):
         if not self.connected:
             return
@@ -89,15 +62,16 @@ class Client:
 
             self.disconnect()
 
-    def disconnect(self):
+    def disconnect(self, notify_server=True):
         if not self.connected:
             return
 
-        try:
-            self.send_disconnect()
+        if notify_server:
+            try:
+                self.send(disconnect())
 
-        except Exception:
-            pass
+            except Exception:
+                pass
 
         try:
             if self.receiver is not None:

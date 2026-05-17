@@ -1,21 +1,22 @@
 import pygame
 
-from client.states.client_state import ClientState
-from client.states.playing_state import PlayingState
+from client.states import ClientState
+from client.ui import Button
 
-from client.ui.button import Button
-
-from shared.protocol.message_fields import (
+from shared.protocol import (
 	TYPE,
 	PLAYER_ID,
 	MESSAGE,
-)
-
-from shared.protocol.message_types import (
 	MATCH_FOUND,
 	ERROR,
-	MATCH_CLOSED,
+	DISCONNECT
 )
+
+from client.config.ui.connection_error_config import CONNECTION_ERROR_DEFAULT_MESSAGE
+
+from client.config.ui.matchmaking_config import *
+
+from client.network import connect
 
 
 class MatchmakingState(ClientState):
@@ -24,41 +25,56 @@ class MatchmakingState(ClientState):
 
 		self.username = username
 
-		self.font = pygame.font.SysFont(None, 48)
+		self.font = pygame.font.SysFont(
+			None,
+			MATCHMAKING_FONT_SIZE
+		)
 
 		center_x = self.screen.get_width() // 2
 
 		self.cancel_button = Button(
-			rect=(center_x - 100, 350, 200, 60),
-			text="Cancel",
-			background_color=(200, 70, 70),
-			hover_color=(230, 90, 90),
+			rect=(
+				center_x - MATCHMAKING_CANCEL_BUTTON_WIDTH // 2,
+				MATCHMAKING_CANCEL_BUTTON_Y,
+				MATCHMAKING_CANCEL_BUTTON_WIDTH,
+				MATCHMAKING_CANCEL_BUTTON_HEIGHT,
+			),
+			text=MATCHMAKING_CANCEL_BUTTON_TEXT,
+			background_color=MATCHMAKING_CANCEL_BUTTON_COLOR,
+			hover_color=MATCHMAKING_CANCEL_BUTTON_HOVER_COLOR,
 		)
-
+		
 	def enter(self):
 		if not self.game.client.connected:
 			connected = self.game.client.connect()
 
 			if not connected:
-				from client.states.connection_error_state import ConnectionErrorState
-				self.game.change_state(
-					ConnectionErrorState(
-						self.game,
-						"Could not connect to server",
-					)
-				)
+				from client.states import ConnectionErrorState
+				self.game.change_state(ConnectionErrorState(self.game, CONNECTION_ERROR_DEFAULT_MESSAGE))
 				return
 
-		self.game.client.send_connect(self.username)
+		self.game.client.send(connect(self.username))
 
 	def handle_event(self, event):
 
-		if self.cancel_button.is_clicked(event):
-			self.cancel_matchmaking()
-
-		if event.type == pygame.KEYDOWN:
-			if event.key == pygame.K_ESCAPE:
+		if isinstance(event, pygame.event.Event):
+			if self.cancel_button.is_clicked(event):
 				self.cancel_matchmaking()
+				return
+
+			elif event.type == pygame.KEYDOWN:
+				if event.key == pygame.K_ESCAPE:
+					self.cancel_matchmaking()
+		else:
+			event_type = event.get(TYPE)
+
+			if event_type == MATCH_FOUND:
+				from client.states import PlayingState
+				player_id = event.get(PLAYER_ID)
+				self.game.change_state(PlayingState(self.game, player_id))
+				return
+
+			super().handle_event(event)
 
 	def update(self, dt):
 		while not self.game.event_queue.empty():
@@ -67,53 +83,29 @@ class MatchmakingState(ClientState):
 			event_type = event.get(TYPE)
 
 			if event_type == MATCH_FOUND:
+				from client.states import PlayingState
 				player_id = event.get(PLAYER_ID)
+				self.game.change_state(PlayingState(self.game,player_id))
 
-				self.game.change_state(
-					PlayingState(
-						self.game,
-						player_id,
-					)
-				)
-
-			elif event_type == ERROR:
-				print(event.get(MESSAGE))
-				self.go_to_main_menu()
-
-			elif event_type == MATCH_CLOSED:
+			elif event_type in (ERROR, DISCONNECT):
 				print(event.get(MESSAGE))
 				self.go_to_main_menu()
 
 	def draw(self):
-		self.screen.fill((25, 25, 25))
+		self.screen.fill(MATCHMAKING_BACKGROUND_COLOR)
 
-		text = self.font.render(
-			"Buscando partida...",
-			True,
-			(255, 255, 255),
-		)
+		text = self.font.render(MATCHMAKING_TEXT, True, MATCHMAKING_TEXT_COLOR)
 
-		rect = text.get_rect(
-			center=(
-				self.screen.get_width() // 2,
-				220,
-			)
-		)
+		rect = text.get_rect(center=(self.screen.get_width() // 2, MATCHMAKING_TEXT_Y))
 
 		self.screen.blit(text, rect)
 
-		self.cancel_button.draw(
-			self.screen
-		)
+		self.cancel_button.draw(self.screen)
 
 	def cancel_matchmaking(self):
 		self.game.client.disconnect()
-
 		self.go_to_main_menu()
 
 	def go_to_main_menu(self):
-		from client.states.main_menu_state import MainMenuState
-
-		self.game.change_state(
-			MainMenuState(self.game)
-		)
+		from client.states import MainMenuState
+		self.game.change_state(MainMenuState(self.game))

@@ -3,7 +3,6 @@ import threading
 class SnapshotManager:
     def __init__(self):
         self.snapshot = None
-
         self.lock = threading.Lock()
 
     def update_snapshot(self, snapshot):

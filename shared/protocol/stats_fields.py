@@ -1,0 +1,6 @@
+FOOD_EATEN = "food_eaten"
+CELLS_EATEN = "cells_eaten"
+HIGHEST_MASS = "highest_mass"
+LEADERBOARD_TIME = "leaderboard_time"
+TOP_POSITION = "top_position"
+TIME_ALIVE = "time_alive"

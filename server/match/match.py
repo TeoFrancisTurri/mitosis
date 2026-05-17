@@ -3,17 +3,19 @@ import math
 import threading
 import time
 
-from server.entities.player import Player
-from server.config.player_config import PLAYER_INITIAL_MASS
-from server.config.match_config import MATCH_TICK_RATE
-from server.config.food_config import FOOD_TYPES, FOOD_INITIAL_AMOUNT, RADIUS, MASS
-from server.entities.food import Food
-from server.managers.collision_manager import CollisionManager
 
-from shared.config.world_config import MAP_HEIGHT, MAP_WIDTH
-from shared.config.colors import ENTITIES_COLORS
-from shared.protocol.message_types import MATCH_FOUND, GAME_STATE
-from shared.protocol.message_fields import TYPE, PLAYER_ID, SNAPSHOT, TICK
+from server.config import MATCH_TICK_RATE, message_game_state, message_match_found, message_player_dead, message_disconnected
+from server.managers import (
+    CollisionManager,
+    LeaderboardManager,
+    PlayerManager,
+    FoodManager
+)
+
+
+from shared.config import (MAP_HEIGHT, MAP_WIDTH)
+from shared.protocol import (MATCH_FOUND, GAME_STATE, TYPE, SNAPSHOT, TICK, FOODS, LEADERBOARD, PLAYERS)
+
 
 
 class Match:
@@ -27,12 +29,15 @@ class Match:
         self.map_width = MAP_WIDTH
         self.map_height = MAP_HEIGHT
 
-        self.next_player_id = 1
-        self.next_food_id = 1
         self.tick = 0
-        self.collision_manager = CollisionManager(self)
 
-        self.generate_initial_foods()
+        self.player_manager = PlayerManager(self)
+        self.collision_manager = CollisionManager(self)
+        self.leaderboard_manager = LeaderboardManager(self)
+        self.food_manager = FoodManager(self)
+
+        self.food_manager.generate_initial_foods()
+
         self.running = False
         self.thread = None
         self.lock = threading.Lock()
@@ -43,149 +48,98 @@ class Match:
         self.thread.start()
 
     def run(self):
+        last_time = time.monotonic()
+        
         while self.running:
+            current_time = time.monotonic()
+            delta_time = current_time - last_time
+            last_time = current_time
+
             self.tick += 1
 
-            self.update()
-            self.collision_manager.update()
+            self.update(delta_time)
             self.send_snapshot()
 
             time.sleep(1 / MATCH_TICK_RATE)
 
+    def update(self, delta_time): 
+        self.player_manager.update(delta_time)
+        self.collision_manager.update()
+        self.leaderboard_manager.update(delta_time)
+            
+    
     def add_client(self, client_handler, username):
-        with self.lock:
-            player = self.add_player(username)
+       
+        player = self.player_manager.add_player(username)
 
+        with self.lock:
             self.client_handlers.append(client_handler)
 
             client_handler.player = player
             client_handler.match = self
-
-        client_handler.send({
-            TYPE: MATCH_FOUND,
-            PLAYER_ID: player.player_id,
-        })
+        
+        client_handler.send(message_match_found(player.player_id))
 
     def remove_client(self, client_handler):
         with self.lock:
             if client_handler in self.client_handlers:
                 self.client_handlers.remove(client_handler)
 
-            if client_handler.player is not None:
-                self.players.pop(client_handler.player.player_id, None)
-
             client_handler.player = None
             client_handler.match = None
 
-
-    def add_player(self, username):
-        initial_radius = Player.calculate_radius_from_mass(
-            PLAYER_INITIAL_MASS
-        )
-
-        x, y = self.get_random_spawn(initial_radius)
-        color = random.choice(ENTITIES_COLORS)
-
-        player = Player(
-            self.next_player_id,
-            username,
-            x,
-            y,
-            color
-        )
-
-        self.players[player.player_id] = player
-        self.next_player_id += 1
-
-        return player
-
-    def get_random_spawn(self, radius):
-        max_attempts = 100
-
-        for _ in range(max_attempts):
-            x = random.randint(radius, self.map_width - radius)
-            y = random.randint(radius, self.map_height - radius)
-
-            if self.is_valid_spawn(x, y, radius):
-                return x, y
-
-        return self.map_width // 2, self.map_height // 2
-
-    def is_valid_spawn(self, x, y, radius):
-        for player in self.players.values():
-            distance = math.sqrt((x - player.x) ** 2 + (y - player.y) ** 2)
-            min_distance = radius + player.radius + 50
-
-            if distance < min_distance:
-                return False
-
-        return True
-
-    def update(self):
-        with self.lock:
-            for player in self.players.values():
-                player.update()
-                self.keep_inside_map(player)
 
     def send_snapshot(self):
         with self.lock:
             snapshot = self.generate_snapshot()
             client_handlers = list(self.client_handlers)
+            tick = self.tick
 
-        message = {
-            TYPE: GAME_STATE,
-            TICK: self.tick,
-            SNAPSHOT: snapshot,
-        }
-       
-        for client_handler in client_handlers:
+        self.broadcast(message_game_state(snapshot, tick))
+
+        
+    def broadcast(self, message):
+        for client_handler in self.client_handlers:
             client_handler.send(message)
 
-    def keep_inside_map(self, player):
-        player.x = max(0, min(player.x, MAP_WIDTH))
-        player.y = max(0, min(player.y, MAP_HEIGHT))
 
     def generate_snapshot(self):
         return {
-            "players": [
-                player.to_snapshot()
-                for player in self.players.values()
-            ],
-            "foods": [
-                food.to_snapshot()
-                for food in self.foods.values()
-            ],
+            PLAYERS: self.player_manager.to_snapshot(),
+            FOODS: self.food_manager.to_snapshot(),
+            LEADERBOARD: self.leaderboard_manager.to_snapshot(),
         }
+
+    def player_dead(self, player):
+        with self.lock:
+            removed_player = self.player_manager.remove_player(player)
+
+        if removed_player is None:
+            return
+
+
+        dead_client_handler = self.find_client_handler_by_player(removed_player)
+
+        if dead_client_handler is not None:
+            dead_client_handler.send(
+                message_player_dead(removed_player)
+            )
+
+        print(
+            f"Jugador muerto: {player.username} "
+            f"({player.player_id})"
+        )
+
+    def find_client_handler_by_player(self, player):
+        for client_handler in self.client_handlers:
+            if client_handler.player == player:
+                return client_handler
+
+        return None
+
+    def respawn_player(self, player):
+        with self.lock:
+            self.player_manager.respawn_player(player)
 
     def stop(self):
         self.running = False
-
-    
-    def generate_initial_foods(self):
-        for _ in range(FOOD_INITIAL_AMOUNT):
-            self.add_food()
-
-
-    def add_food(self):
-        food_type = random.choice(FOOD_TYPES)
-
-        radius = food_type[RADIUS]
-        mass = food_type[MASS]
-
-        x = random.randint(radius, self.map_width - radius)
-        y = random.randint(radius, self.map_height - radius)
-
-        color = random.choice(ENTITIES_COLORS)
-
-        food = Food(
-            food_id=self.next_food_id,
-            x=x,
-            y=y,
-            radius=food_type[RADIUS],
-            mass=food_type[MASS],
-            color=color
-        )
-
-        self.foods[food.food_id] = food
-
-        self.next_food_id += 1

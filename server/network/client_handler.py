@@ -1,6 +1,6 @@
 import json
 
-from server.network.client_message_handler import ClientMessageHandler
+from server.network.server_message_handler import ServerMessageHandler
 from shared.config.network_config import ENCODING, BUFFER_SIZE
 
 class ClientHandler:
@@ -15,10 +15,12 @@ class ClientHandler:
 
         self.connected = True
 
-        self.message_handler = ClientMessageHandler(self)
+        self.message_handler = ServerMessageHandler(self)
 
     def run(self):
         print(f"Cliente conectado: {self.address}")
+
+        buffer = ""
 
         try:
             while self.connected:
@@ -28,14 +30,22 @@ class ClientHandler:
                     print(f"Cliente cerró conexión: {self.address}")
                     break
 
-                try:
-                    message = json.loads(data.decode(ENCODING))
+                buffer += data.decode(ENCODING)
 
-                except json.JSONDecodeError:
-                    print(f"JSON inválido recibido de {self.address}")
-                    continue
+                while "\n" in buffer:
+                    line, buffer = buffer.split("\n", 1)
 
-                self.message_handler.handle(message)
+                    if not line:
+                        continue
+
+                    try:
+                        message = json.loads(line)
+
+                    except json.JSONDecodeError:
+                        print(f"JSON inválido recibido de {self.address}: {line}")
+                        continue
+
+                    self.message_handler.handle(message)
 
         except ConnectionResetError:
             print(f"Conexión reseteada por cliente: {self.address}")

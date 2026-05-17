@@ -3,7 +3,7 @@ import threading
 
 from server.network.client_handler import ClientHandler
 from server.matchmaking.match_manager import MatchManager
-from server.config.server_network_config import HOST
+from server.config.network_config import HOST
 from shared.config.network_config import PORT
 
 
