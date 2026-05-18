@@ -4,17 +4,19 @@ import threading
 import time
 
 
-from server.config import MATCH_TICK_RATE, message_game_state, message_match_found, message_player_dead, message_disconnected
+from server.config import MATCH_TICK_RATE
+from server.network.client_messages import message_game_state, message_match_found, message_player_dead, message_disconnected
 from server.managers import (
     CollisionManager,
     LeaderboardManager,
     PlayerManager,
-    FoodManager
+    FoodManager,
+    VirusManager,
 )
 
 
 from shared.config import (MAP_HEIGHT, MAP_WIDTH)
-from shared.protocol import (MATCH_FOUND, GAME_STATE, TYPE, SNAPSHOT, TICK, FOODS, LEADERBOARD, PLAYERS)
+from shared.protocol import (MATCH_FOUND, GAME_STATE, TYPE, SNAPSHOT, TICK, FOODS, VIRUSES, LEADERBOARD, PLAYERS)
 
 
 
@@ -25,6 +27,7 @@ class Match:
         self.client_handlers = []
         self.players = {}
         self.foods = {}
+        self.viruses = {}
 
         self.map_width = MAP_WIDTH
         self.map_height = MAP_HEIGHT
@@ -35,8 +38,10 @@ class Match:
         self.collision_manager = CollisionManager(self)
         self.leaderboard_manager = LeaderboardManager(self)
         self.food_manager = FoodManager(self)
+        self.virus_manager = VirusManager(self)
 
         self.food_manager.generate_initial_foods()
+        self.virus_manager.generate_initial_viruses()
 
         self.running = False
         self.thread = None
@@ -62,8 +67,10 @@ class Match:
 
             time.sleep(1 / MATCH_TICK_RATE)
 
-    def update(self, delta_time): 
+    def update(self, delta_time):
         self.player_manager.update(delta_time)
+        self.food_manager.update(delta_time)
+        self.virus_manager.update(delta_time)
         self.collision_manager.update()
         self.leaderboard_manager.update(delta_time)
             
@@ -107,6 +114,7 @@ class Match:
         return {
             PLAYERS: self.player_manager.to_snapshot(),
             FOODS: self.food_manager.to_snapshot(),
+            VIRUSES: self.virus_manager.to_snapshot(),
             LEADERBOARD: self.leaderboard_manager.to_snapshot(),
         }
 
@@ -136,6 +144,14 @@ class Match:
                 return client_handler
 
         return None
+
+    def split_player(self, player):
+        with self.lock:
+            self.player_manager.split_player(player)
+
+    def eject_mass(self, player):
+        with self.lock:
+            self.player_manager.eject_mass(player)
 
     def respawn_player(self, player):
         with self.lock:

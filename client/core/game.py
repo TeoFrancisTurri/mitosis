@@ -2,7 +2,7 @@ from queue import Queue
 
 import pygame
 
-from client.config import SCREEN_WIDTH, SCREEN_HEIGHT, FPS, WINDOW_TITLE
+from client.config import FPS, WINDOW_TITLE
 from client.states import MainMenuState
 from client.network import Client
 from client.camera import Camera
@@ -12,9 +12,7 @@ class Game:
     def __init__(self):
         pygame.init()
 
-        self.screen = pygame.display.set_mode(
-            (SCREEN_WIDTH, SCREEN_HEIGHT)
-        )
+        self.screen = pygame.display.set_mode((0, 0), pygame.FULLSCREEN)
 
         pygame.display.set_caption(WINDOW_TITLE)
 
@@ -22,7 +20,7 @@ class Game:
         self.running = True
 
         pygame.key.set_repeat(400, 40)
-        self.camera = Camera(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.camera = Camera(self.screen.get_width(), self.screen.get_height())
         self.event_queue = Queue()
         self.snapshot_manager = SnapshotManager()
 

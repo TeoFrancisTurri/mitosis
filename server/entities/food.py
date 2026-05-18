@@ -20,6 +20,9 @@ class Food:
 
         self.color = color
 
+        self.vx = 0.0
+        self.vy = 0.0
+
     def to_snapshot(self):
         return {
             ID: self.food_id,

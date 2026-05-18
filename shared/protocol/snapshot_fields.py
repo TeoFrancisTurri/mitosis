@@ -1,5 +1,6 @@
 PLAYERS = "players"
 FOODS = "foods"
+VIRUSES = "viruses"
 ID = "id"
 X = "x"
 Y = "y"

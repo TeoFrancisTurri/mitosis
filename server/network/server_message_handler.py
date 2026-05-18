@@ -1,5 +1,4 @@
-from shared.protocol import CONNECT, PLAYER_INPUT, DISCONNECT, RESPAWN, TYPE, USERNAME
-from server.config import PLAYER_DEFAULT_USERNAME
+from shared.protocol import CONNECT, PLAYER_INPUT, DISCONNECT, RESPAWN, SPLIT, EJECT, TYPE, USERNAME
 
 
 class ServerMessageHandler:
@@ -11,6 +10,8 @@ class ServerMessageHandler:
             PLAYER_INPUT: self.handle_player_input,
             DISCONNECT: self.handle_disconnect,
             RESPAWN: self.handle_respawn,
+            SPLIT: self.handle_split,
+            EJECT: self.handle_eject,
         }
 
     def handle(self, message):
@@ -23,9 +24,6 @@ class ServerMessageHandler:
 
     def handle_connect(self, message):
         username = message.get(USERNAME)
-
-        if username is None or username.strip() == "":
-            username = PLAYER_DEFAULT_USERNAME
 
         self.client_handler.match_manager.add_client(
             self.client_handler,
@@ -51,3 +49,21 @@ class ServerMessageHandler:
             return
 
         match.respawn_player(player)
+
+    def handle_split(self, message):
+        player = self.client_handler.player
+        match = self.client_handler.match
+
+        if player is None or match is None:
+            return
+
+        match.split_player(player)
+
+    def handle_eject(self, message):
+        player = self.client_handler.player
+        match = self.client_handler.match
+
+        if player is None or match is None:
+            return
+
+        match.eject_mass(player)

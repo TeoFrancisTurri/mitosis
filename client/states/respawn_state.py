@@ -119,7 +119,7 @@ class RespawnState(ClientState):
             (RESPAWN_STATE_CELLS_EATEN_LABEL, self.stats[CELLS_EATEN]),
         ]
         right_stats = [
-            (RESPAWN_STATE_HIGHEST_MASS_LABEL, self.stats[HIGHEST_MASS]),
+            (RESPAWN_STATE_HIGHEST_MASS_LABEL, int(self.stats[HIGHEST_MASS])),
             (RESPAWN_STATE_LEADERBOARD_TIME_LABEL, self.format_time(self.stats[LEADERBOARD_TIME])),
             (RESPAWN_STATE_TOP_POSITION_LABEL, self.stats[TOP_POSITION]),
         ]

@@ -6,6 +6,8 @@ from shared.protocol import (
     CONNECT,
     PLAYER_INPUT,
     RESPAWN,
+    SPLIT,
+    EJECT,
     DISCONNECT,
 )
 
@@ -28,6 +30,18 @@ def player_input(direction_x, direction_y):
 def respawn():
     return {
         TYPE: RESPAWN,
+    }
+
+
+def split():
+    return {
+        TYPE: SPLIT,
+    }
+
+
+def eject():
+    return {
+        TYPE: EJECT,
     }
 
 

@@ -1,4 +1,5 @@
 
-from .client_config import WINDOW_TITLE, DEFAULT_USERNAME, SCREEN_HEIGHT, SCREEN_WIDTH, FPS
-from .network_config import HOST
+from .client_config import WINDOW_TITLE, DEFAULT_USERNAME, FPS
+from shared.config import HOST
 from .map_config import GRID_COLOR, GRID_SIZE, MAP_CLIP_EXTRA
+from .camera_config import CAMERA_ZOOM_SPEED, CAMERA_ZOOM_MIN, CAMERA_ZOOM_BASE, CAMERA_ZOOM_MASS_POWER, CAMERA_ZOOM_CELL_POWER, CAMERA_ZOOM_REFERENCE_WIDTH

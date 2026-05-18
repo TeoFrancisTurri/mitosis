@@ -1,7 +1,6 @@
-RADIUS = "radius"
-MASS = "mass"
+from shared.protocol.snapshot_fields import RADIUS, MASS
 
-FOOD_INITIAL_AMOUNT = 70
+FOOD_INITIAL_AMOUNT = 100
 
 FOOD_TYPES = [
     {

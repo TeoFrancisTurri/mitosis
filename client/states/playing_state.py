@@ -1,7 +1,7 @@
+import math
 import pygame
 
 from client.states import ClientState
-from client.managers import SnapshotManager
 
 from shared.config import MAP_WIDTH, MAP_HEIGHT
 from shared.protocol import STATS, TYPE, PLAYER_DEAD
@@ -13,6 +13,7 @@ from client.config import (
 from client.network import player_input
 
 from client.config.ui.playing_state_config import *
+from client.config.ui.leaderboard_config import *
 
 from shared.protocol import *
 
@@ -21,6 +22,7 @@ class PlayingState(ClientState):
     def __init__(self, game, player_id):
         super().__init__(game)
         self.player_id = player_id
+        self.last_dt = 0
         self.mass_font = pygame.font.SysFont(None, PLAYING_SCORE_FONT_SIZE)
 
         self.leaderboard_font = pygame.font.SysFont(None, PLAYING_LEADERBOARD_FONT_SIZE)
@@ -29,8 +31,15 @@ class PlayingState(ClientState):
 
     def handle_event(self, event):
         if isinstance(event, pygame.event.Event):
-            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                self.leave_game()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    self.leave_game()
+                elif event.key == pygame.K_SPACE:
+                    from client.network import split
+                    self.game.client.send(split())
+                elif event.key == pygame.K_w:
+                    from client.network import eject
+                    self.game.client.send(eject())
         else:
             event_type = event.get(TYPE)
 
@@ -44,6 +53,7 @@ class PlayingState(ClientState):
                 
         
     def update(self, dt):
+        self.last_dt = dt / 1000
         direction_x, direction_y = self.get_mouse_direction()
         self.game.client.send(player_input(direction_x, direction_y))
 
@@ -56,25 +66,27 @@ class PlayingState(ClientState):
             return
 
         players = snapshot.get(PLAYERS)
-        local_player = self.find_local_player(players)
+        local_cells = self.find_local_cells(players)
 
-        if local_player is None:
+        if not local_cells:
             return
 
-        # Actualizar cámara siguiendo al jugador local
-        self.game.camera.update(
-            local_player[X],
-            local_player[Y]
-        )
-            
-        #bordes
+        centroid_x = sum(c[X] for c in local_cells) / len(local_cells)
+        centroid_y = sum(c[Y] for c in local_cells) / len(local_cells)
+
+        total_mass = sum(c[MASS] for c in local_cells)
+        self.game.camera.update(centroid_x, centroid_y, len(local_cells), total_mass, self.last_dt)
+
+        local_player = local_cells[0]
+
         map_x, map_y = self.game.camera.apply(0, 0)
+        map_end_x, map_end_y = self.game.camera.apply(MAP_WIDTH, MAP_HEIGHT)
 
         map_rect = pygame.Rect(
             int(map_x) - MAP_CLIP_EXTRA,
             int(map_y) - MAP_CLIP_EXTRA,
-            MAP_WIDTH + MAP_CLIP_EXTRA * 2,
-            MAP_HEIGHT + MAP_CLIP_EXTRA * 2
+            int(map_end_x - map_x) + MAP_CLIP_EXTRA * 2,
+            int(map_end_y - map_y) + MAP_CLIP_EXTRA * 2
         )
 
         self.screen.set_clip(map_rect)
@@ -82,35 +94,31 @@ class PlayingState(ClientState):
         self.draw_grid()
 
         foods = snapshot.get(FOODS, [])
-        self.draw_foods(foods, self.game.camera.x, self.game.camera.y)
+        self.draw_foods(foods)
 
-        sorted_players = sorted(
-            players,
-            key=lambda player: player[RADIUS]
+        viruses = snapshot.get(VIRUSES, [])
+
+        tagged_players = [(ENTITY_PLAYER, p) for p in players]
+        tagged_viruses = [(ENTITY_VIRUS, v) for v in viruses]
+
+        sorted_entities = sorted(
+            tagged_players + tagged_viruses,
+            key=self.get_entity_radius
         )
 
-        for player in sorted_players:
-            world_x = player[X]
-            world_y = player[Y]
-
+        for kind, entity in sorted_entities:
+            world_x = entity[X]
+            world_y = entity[Y]
             screen_x, screen_y = self.game.camera.apply(world_x, world_y)
-
             x = int(screen_x)
             y = int(screen_y)
+            radius = max(1, int(self.game.camera.scale(entity[RADIUS])))
+            color = tuple(entity[COLOR])
 
-            radius = int(player[RADIUS])
-            color = tuple(player[COLOR])
-
-            border_color = (
-                max(0, color[0] - 40),
-                max(0, color[1] - 40),
-                max(0, color[2] - 40),
-            )
-
-            pygame.draw.circle(self.screen, border_color, (x, y), radius,)
-            pygame.draw.circle(self.screen, color, (x, y), radius - 3,)
-
-            self.draw_username(player[USERNAME], x, y)
+            if kind == ENTITY_VIRUS:
+                self.draw_virus(x, y, radius, color)
+            else:
+                self.draw_player(entity, x, y, radius, color)
         
         self.screen.set_clip(None)
 
@@ -118,21 +126,16 @@ class PlayingState(ClientState):
 
         leaderboard = snapshot.get(LEADERBOARD, [])
 
-        if local_player is not None:
-            self.draw_score(local_player)
-            self.draw_leaderboard(leaderboard, local_player)
+        self.draw_score(sum(c[MASS] for c in local_cells))
+        self.draw_leaderboard(leaderboard, local_player)
 
     def leave_game(self):
         from client.states import MainMenuState
         self.game.client.disconnect()
         self.game.change_state(MainMenuState(self.game))
 
-    def find_local_player(self, players):
-        for player in players:
-            if player[ID] == self.player_id:
-                return player
-
-        return None
+    def find_local_cells(self, players):
+        return [p for p in players if p[ID] == self.player_id]
 
     def get_mouse_direction(self):
         mouse_x, mouse_y = pygame.mouse.get_pos()
@@ -151,66 +154,81 @@ class PlayingState(ClientState):
 
         return direction
     
-    def draw_foods(self, foods, camera_x, camera_y):
+    def get_entity_radius(self, kind_entity):
+        _, entity = kind_entity
+        return entity[RADIUS]
+
+    def draw_foods(self, foods):
+        camera = self.game.camera
         for food in foods:
-            food_x = food[X]
-            food_y = food[Y]
+            x, y = camera.apply(food[X], food[Y])
+            radius = max(1, int(camera.scale(food[RADIUS])))
+            pygame.draw.circle(self.screen, food[COLOR], (int(x), int(y)), radius)
 
-            food_radius = food[RADIUS]
-            food_color = food[COLOR]
+    def draw_player(self, player, x, y, radius, color):
+        border_color = (
+            max(0, color[0] - PLAYING_PLAYER_BORDER_DARKEN_AMOUNT),
+            max(0, color[1] - PLAYING_PLAYER_BORDER_DARKEN_AMOUNT),
+            max(0, color[2] - PLAYING_PLAYER_BORDER_DARKEN_AMOUNT),
+        )
+        pygame.draw.circle(self.screen, border_color, (x, y), radius)
+        pygame.draw.circle(self.screen, color, (x, y), max(0, radius - PLAYING_PLAYER_INNER_RADIUS_OFFSET))
+        self.draw_username(player[USERNAME], x, y)
 
-            x = int(food_x - camera_x)
-            y = int(food_y - camera_y)
-
-            pygame.draw.circle(self.screen, food_color, (x, y), food_radius)
+    def draw_virus(self, x, y, radius, color):
+        pygame.draw.circle(self.screen, color, (x, y), radius)
+        spike_length = max(1, int(self.game.camera.scale(PLAYING_VIRUS_SPIKE_LENGTH)))
+        for i in range(PLAYING_VIRUS_SPIKE_COUNT):
+            angle = (2 * math.pi / PLAYING_VIRUS_SPIKE_COUNT) * i
+            tip_x = x + (radius + spike_length) * math.cos(angle)
+            tip_y = y + (radius + spike_length) * math.sin(angle)
+            left_x = x + radius * math.cos(angle - 0.25)
+            left_y = y + radius * math.sin(angle - 0.25)
+            right_x = x + radius * math.cos(angle + 0.25)
+            right_y = y + radius * math.sin(angle + 0.25)
+            pygame.draw.polygon(self.screen, color, [
+                (int(tip_x), int(tip_y)),
+                (int(left_x), int(left_y)),
+                (int(right_x), int(right_y)),
+            ])
 
     def draw_grid(self):
-        camera_x = int(self.game.camera.x)
-        camera_y = int(self.game.camera.y)
+        camera = self.game.camera
 
-        screen_width = self.screen.get_width()
-        screen_height = self.screen.get_height()
+        world_half_w = self.screen.get_width() / (2 * camera.zoom)
+        world_half_h = self.screen.get_height() / (2 * camera.zoom)
+        center_wx = camera.x + camera.half_screen_width
+        center_wy = camera.y + camera.half_screen_height
 
-        visible_start_x = max(0, camera_x)
-        visible_end_x = min(MAP_WIDTH, camera_x + screen_width)
+        visible_start_x = max(0, center_wx - world_half_w)
+        visible_end_x = min(MAP_WIDTH, center_wx + world_half_w)
+        visible_start_y = max(0, center_wy - world_half_h)
+        visible_end_y = min(MAP_HEIGHT, center_wy + world_half_h)
 
-        visible_start_y = max(0, camera_y)
-        visible_end_y = min(MAP_HEIGHT, camera_y + screen_height)
+        first_grid_x = (int(visible_start_x) // GRID_SIZE) * GRID_SIZE
+        first_grid_y = (int(visible_start_y) // GRID_SIZE) * GRID_SIZE
 
-        first_grid_x = (visible_start_x // GRID_SIZE) * GRID_SIZE
-        first_grid_y = (visible_start_y // GRID_SIZE) * GRID_SIZE
+        for world_x in range(first_grid_x, int(visible_end_x) + 1, GRID_SIZE):
+            sx, sy1 = camera.apply(world_x, visible_start_y)
+            _, sy2 = camera.apply(world_x, visible_end_y)
+            pygame.draw.line(self.screen, GRID_COLOR, (sx, sy1), (sx, sy2))
 
-        for world_x in range(first_grid_x, visible_end_x + 1, GRID_SIZE):
-            screen_x = world_x - camera_x
+        for world_y in range(first_grid_y, int(visible_end_y) + 1, GRID_SIZE):
+            sx1, sy = camera.apply(visible_start_x, world_y)
+            sx2, _ = camera.apply(visible_end_x, world_y)
+            pygame.draw.line(self.screen, GRID_COLOR, (sx1, sy), (sx2, sy))
 
-            pygame.draw.line(
-                self.screen,
-                GRID_COLOR,
-                (screen_x, visible_start_y - camera_y),
-                (screen_x, visible_end_y - camera_y),
-            )
-
-        for world_y in range(first_grid_y, visible_end_y + 1, GRID_SIZE):
-            screen_y = world_y - camera_y
-
-            pygame.draw.line(
-                self.screen,
-                GRID_COLOR,
-                (visible_start_x - camera_x, screen_y),
-                (visible_end_x - camera_x, screen_y),
-            )
-
-    def draw_score(self, player):
-        mass = int(player.get(MASS))
+    def draw_score(self, mass):
+        mass = int(mass)
 
         text = self.mass_font.render(
             f"Score: {mass}",
             True,
-            SCORE_TEXT_COLOR
+            PLAYING_SCORE_TEXT_COLOR
         )
 
-        x = SCORE_MARGIN_LEFT
-        y = self.screen.get_height() - text.get_height() - SCORE_MARGIN_BOTTOM
+        x = PLAYING_SCORE_MARGIN_LEFT
+        y = self.screen.get_height() - text.get_height() - PLAYING_SCORE_MARGIN_BOTTOM
 
         self.screen.blit(text, (x, y))
 
@@ -278,7 +296,7 @@ class PlayingState(ClientState):
         
 
     def draw_username(self, username, x, y):
-        text = self.username_font.render(username, True, USERNAME_TEXT_COLOR)
+        text = self.username_font.render(username, True, PLAYING_USERNAME_TEXT_COLOR)
 
         text_x = x - text.get_width() // 2
         text_y = y - text.get_height() // 2

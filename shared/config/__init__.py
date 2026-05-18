@@ -1,3 +1,2 @@
 from .world_config import MAP_HEIGHT, MAP_WIDTH
-from .colors import ENTITIES_COLORS
-from .network_config import PORT, ENCODING, BUFFER_SIZE
+from .network_config import HOST, PORT, ENCODING, BUFFER_SIZE
